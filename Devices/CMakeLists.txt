@@ -22,7 +22,6 @@ set(${PROJECT_NAME}_SRCS
   igtlioStatusDevice.cxx
   igtlioCommandDevice.cxx
   igtlioTransformDevice.cxx
-  igtlioPolyDataDevice.cxx
   )
 
 set(${PROJECT_NAME}_HDRS
