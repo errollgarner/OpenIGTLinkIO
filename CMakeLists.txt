@@ -49,9 +49,9 @@ include(${OpenIGTLink_USE_FILE})
 
 ###########################################################
 # Configuration
-if(NOT BUILD_SHARED_LIBS)
-  set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared or static libs")
-endif()
+ if(NOT BUILD_SHARED_LIBS)
+   set(BUILD_SHARED_LIBS ON CACHE BOOL "Build shared or static libs")
+ endif()
 
 if(NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
   set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${OpenIGTLinkIO_LIBRARY_INSTALL}")

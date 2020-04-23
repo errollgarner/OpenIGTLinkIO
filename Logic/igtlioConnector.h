@@ -1,4 +1,4 @@
-/*=auto=========================================================================
+﻿/*=auto=========================================================================
 
   Portions (c) Copyright 2018 IGSIO
 
@@ -17,6 +17,8 @@
 // OpenIGTLink includes
 #include <igtlServerSocket.h>
 #include <igtlClientSocket.h>
+#include <igtlUDPClientSocket.h>
+#include <igtlMessageRTPWrapper.h>
 
 // IGTLIO includes
 #include "igtlioLogicExport.h"
@@ -55,7 +57,6 @@ enum CONNECTION_ROLE
   CONNECTION_ROLE_CLIENT,
   CONNECTION_ROLE_TYPE
 };
-
 
 /// An OpenIGTLink connection over one TCP/IP port.
 ///
@@ -161,13 +162,23 @@ public:
   enum {
     IO_UNSPECIFIED = 0x00,
     IO_INCOMING   = 0x01,
-    IO_OUTGOING   = 0x02,
+    IO_OUTGOING   = 0x02
   };
 
   enum {
     PERSISTENT_OFF,
     PERSISTENT_ON,
   };
+
+  enum {
+    PROTOCOL_NOT_DEFINED,
+    PROTOCOL_TCP,
+    PROTOCOL_UDP,
+    NUM_PROTOCOL
+  };
+
+  static const char* ConnectorProtocolStr[igtlioConnector::NUM_PROTOCOL];
+
 
   typedef struct {
     std::string   name;
@@ -193,15 +204,26 @@ protected:
   igtlioConnector(const igtlioConnector&);
   void operator=(const igtlioConnector&);
 
+  //TODO: might want to implement different clients for TCP and UDP instead of this?
   struct Client
   {
     int                           ID;
     igtl::ClientSocket::Pointer   Socket;
-    int ThreadID;
-    Client(int id, igtl::ClientSocket::Pointer socket, int threadID)
+    igtl::UDPClientSocket::Pointer UDPSocket;
+    igtl::MessageRTPWrapper::Pointer RTPWrapper;
+    int Protocol;
+    int ReceiveThreadID;
+    int UnwrapThreadID;
+    int ProcessThreadID;
+    Client(int id, igtl::ClientSocket::Pointer socket, igtl::UDPClientSocket::Pointer udpSocket, igtl::MessageRTPWrapper::Pointer rtpWrapper, int protocol, int receiveThreadID, int unwrapThreadID, int processThreadID)
       : ID(id)
       , Socket(socket)
-      , ThreadID(threadID)
+      , UDPSocket(udpSocket)
+      , RTPWrapper(rtpWrapper)
+      , Protocol(protocol)
+      , ReceiveThreadID(receiveThreadID)
+      , UnwrapThreadID(unwrapThreadID)
+      , ProcessThreadID(processThreadID)
     {}
   };
 
@@ -225,7 +247,13 @@ public:
   vtkSetMacro( ServerPort, int );
   vtkGetMacro( Type, int );
   vtkSetMacro( Type, int );
-  vtkSetMacro( State, int);
+  vtkGetMacro( Protocol, int );
+  vtkSetMacro( Protocol, int );
+//  vtkGetMacro( DeviceName, std::string );
+//  vtkSetMacro( DeviceName, std::string );
+//  vtkGetMacro( DeviceType, std::string );
+//  vtkSetMacro( DeviceType, std::string );
+  vtkSetMacro( State, int );
   vtkGetMacro( State, int );
   vtkSetMacro( RestrictDeviceName, int );
   vtkGetMacro( RestrictDeviceName, int );
@@ -242,6 +270,13 @@ public:
 
   int SetTypeServer(int port);
   int SetTypeClient(std::string hostname, int port);
+  int SetProtocolTCP();
+  int SetProtocolUDP();
+  void SetDeviceType( std::string str ){DeviceType = str; return;}
+  std::string GetDeviceType(){return DeviceType;}
+  void SetDeviceName( std::string str ){DeviceName = str; return;}
+  std::string GetDeviceName(){return DeviceName;}
+
 
   vtkGetMacro( CheckCRC, bool);
   void SetCheckCRC(bool c);
@@ -259,14 +294,20 @@ public:
 
 private:
   static void* ConnectionAcceptThreadFunction(void* ptr);
-  static void* ReceiverThreadFunction(void* ptr);
+  static void* TCPReceiverThreadFunction(void* ptr);
+  static void* UDPReceiverThreadFunction(void* ptr);
+  static void* UDPProcessThreadFunction(void* ptr);
+  static void* UnwrapThreadFunction(void* ptr);
 
   //----------------------------------------------------------------
   // OpenIGTLink Message handlers
   //----------------------------------------------------------------
-  bool ReceiveController(int clientID); // called from Thread
+  bool ReceiveTCPController(int clientID); // called from Thread
+  bool ReceiveUDPController(int clientID); // called from Thread
   int SendData(int size, unsigned char* data, Client& client);
   int Skip(int length, Client& client, int skipFully=1);
+  void WriteTimeInfo( unsigned char * UDPPacket );
+
 
   //----------------------------------------------------------------
   // Clients
@@ -331,6 +372,9 @@ protected:
   // Used when receiving command or command response messages.
   // Adds the commands to a queue that is parsed during periodic process
   bool ReceiveCommandMessage(igtl::MessageHeader::Pointer headerMsg, Client& client);
+  //TODO: might want to do something cleaner
+  bool ReceiveCommandMessage(igtl::CommandMessage::Pointer commandMsg, Client& client);
+
 
   // Description:
   // Get the command pointer for the command with the matching id
@@ -345,11 +389,20 @@ protected:
   vtkMutexLockPointer                       DeviceMutex;
 
   //----------------------------------------------------------------
+  // UDP-specific
+  //----------------------------------------------------------------
+  igtl::SimpleMutexLock *                   RTPMutex;
+  igtl::MessageRTPWrapper::Pointer          RTPWrapper;
+  std::string                               DeviceName;
+  std::string                               DeviceType;
+
+  //----------------------------------------------------------------
   // Connector configuration
   //----------------------------------------------------------------
   std::string                               Name;
   int                                       UID; /// unique ID for this connector
   int                                       Type;
+  int                                       Protocol;
   int                                       State;
   int                                       Persistent;
 
@@ -410,6 +463,9 @@ protected:
   vtkMutexLockPointer                       OutgoingCommandDequeMutex;
 
   int                                       NextCommandID;
+
+  //BOGUS:
+  clock_t last_time;
 
 };
 

@@ -53,7 +53,7 @@ igtlioVideoDevice::igtlioVideoDevice()
   VideoStreamDecoderI420 = new I420Decoder();
 #if defined(OpenIGTLink_USE_H264)
   VideoStreamDecoderH264 = new H264Decoder();
-  VideoStreamEncoderH264 = new H264Encoder();
+  VideoStreamEncoderH264 = new H264Encoder("");
   VideoStreamEncoderH264->InitializeEncoder();
   VideoStreamEncoderH264->SetLosslessLink(true);
 #endif
@@ -137,6 +137,7 @@ igtl::VideoMessage::Pointer  igtlioVideoDevice::GetKeyFrameMessage()
   return videoMessage;
 }
 
+#include "igtlVideoMessage.h"
 //---------------------------------------------------------------------------
 int igtlioVideoDevice::ReceiveIGTLMessage(igtl::MessageBase::Pointer buffer, bool checkCRC)
 {
@@ -155,6 +156,8 @@ int igtlioVideoDevice::ReceiveIGTLMessage(igtl::MessageBase::Pointer buffer, boo
       this->SetCurrentCodecType(std::string(Content.codecName));
       this->Modified();
       this->InvokeEvent(VideoModifiedEvent, this);
+      }else{
+        std::cerr << "[igtlioVideoDevice::ReceiveIGTLMessage] Message unpacking/conversion failure. Skipping it." << std::endl << std::flush;
       }
     }
   return success;
